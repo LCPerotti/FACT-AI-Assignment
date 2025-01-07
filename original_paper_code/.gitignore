@@ -1,0 +1,16 @@
+/results
+/*/__pycache__
+/.idea
+/.vscode
+/shelf/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+/src/experiment/__pycache__
+/.idea/
+/src/config.py
+/Src/config.py
+/Src/experiment/__pycache__
