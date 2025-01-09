@@ -151,7 +151,7 @@ def logit_attribution(model, dataset, config, args):
     if config.produce_plots:
         # run the R script
         logit_attribution_plot(config, dataset_slice_name)
-        
+
 def logit_attribution_plot(config, dataset_slice_name):
         subprocess.run(
             [
@@ -284,6 +284,10 @@ def main(args):
     # save the config in a json file in the experiment folder
     with open(f"../results/{config.experiment}/config.json", "w") as f:
         json.dump(config.to_json(), f)
+
+    # NOTE: Set slice to None to avoid error
+    config.dataset_slice = None
+
     # create experiment folder
     if args.only_plot:
         data_slice_name = "full" if config.dataset_end is None else config.dataset_end
