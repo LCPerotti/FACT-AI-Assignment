@@ -12,7 +12,8 @@ from typing import List, Dict, Tuple, Optional, Literal
 from Src.model import BaseModel
 import numpy as np
 import pandas as pd
-from line_profiler import profile
+# NOTE: Temporarily disabled this, should be imported later
+# from line_profiler import profile
 
 REDC = "\033[91m"
 ENDC = "\033[0m"
@@ -336,7 +337,7 @@ class BaseDataset(Dataset):
                 f"Similarity type {similarity_type} is not supported"
             )
             
-    @profile
+    # @profile
     def __generate_similarity_data_sampling_fast__(self):
         
         # load the model

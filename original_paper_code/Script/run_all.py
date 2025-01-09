@@ -9,7 +9,12 @@ sys.path.append(os.path.abspath(os.path.join("..")))
 sys.path.append(os.path.abspath(os.path.join("../Src")))
 sys.path.append(os.path.abspath(os.path.join("../data")))
 from dataclasses import dataclass
-from Src.config import hf_access_token, hf_model_cache_dir # noqa: E402
+
+# NOTE: Disabled values from Src.config for now, to prevent input error
+# This probably results in the models being cached in Script folder, which seems fine for now.
+# from Src.config import hf_access_token, hf_model_cache_dir # noqa: E402
+hf_access_token = ""
+hf_model_cache_dir = ""
 os.environ["HF_HOME"] = hf_model_cache_dir
 from re import A
 import io
@@ -356,7 +361,8 @@ if __name__ == "__main__":
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--dataset", action="store_true", default=False)
     parser.add_argument("--ablate-component", type=str, default="all")
-    parser.add_argument("--experiment", type=str, default="")
+    # Changed default to copyVSfact so it doesn't throw an error due to lack of folder arg
+    parser.add_argument("--experiment", type=str, default="copyVSfact")
     parser.add_argument("--flag", type=str, default="")
     
     args = parser.parse_args()

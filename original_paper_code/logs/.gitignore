@@ -1,0 +1,3 @@
+# gitignore to avoid adding logs but add the directory
+*
+!.gitignore
