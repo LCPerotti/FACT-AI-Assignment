@@ -89,6 +89,7 @@ class BaseDataset(Dataset):
             print(
                 f"{REDC} No subject found in the dataset {ENDC}, proceeding with no subject data"
             )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.no_subject = no_subject
         self.model = model
         self.experiment = experiment
@@ -117,6 +118,9 @@ class BaseDataset(Dataset):
         self.first_subj_pos = []
         self.second_subj_pos = []
         self.subj_len = []
+
+    def as_dataframe(self):
+        return pd.DataFrame(self.full_data)
 
     def reset(
         self,
@@ -225,7 +229,7 @@ class BaseDataset(Dataset):
         if self.no_subject:
             return -1, -1, -1
         subject_string = " " + d["subject"]
-        subject_token = self.model.tokenize(subject_string).squeeze(0).cuda()
+        subject_token = self.model.tokenize(subject_string).squeeze(0).to(self.device)
         prompt_token = d["tokenized_prompt"]
 
         subject_token_len = subject_token.shape[0]
@@ -249,7 +253,7 @@ class BaseDataset(Dataset):
 
     def __find_obj_pos__(self, d: Dict) -> int:
         object_string = d["target_new"]
-        object_token = self.model.tokenize(object_string).cuda()
+        object_token = self.model.tokenize(object_string).to(self.device)
         prompt_token = d["tokenized_prompt"]
 
         # find the first occurence of the subject tokens in the prompt tokens
@@ -277,12 +281,12 @@ class BaseDataset(Dataset):
             if self.similarity[0] and self.similarity[2] == "data-sampling":
                 d["target_new"] = random.choice(d["target_new_list"])
             d["prompt"] = self.__get_prompt__(d)
-            d["tokenized_prompt"] = self.model.tokenize(d["prompt"]).squeeze(0).cuda()
+            d["tokenized_prompt"] = self.model.tokenize(d["prompt"]).squeeze(0).to(self.device)
             d["target_new_token"] = self.one_token(
-                self.model.tokenize(d["target_new"]).squeeze(0).cuda()
+                self.model.tokenize(d["target_new"]).squeeze(0).to(self.device)
             )
             d["target_true_token"] = self.one_token(
-                self.model.tokenize(d["target_true"]).squeeze(0).cuda()
+                self.model.tokenize(d["target_true"]).squeeze(0).to(self.device)
             )
             d["targets"] = torch.cat(
                 (d["target_true_token"], d["target_new_token"]), dim=0
@@ -380,7 +384,7 @@ class BaseDataset(Dataset):
             if target_word in similarity_score_per_word:
                 continue
             
-            target_vector = word_embeddings[word_index.loc[target_word,"index"]].cuda()
+            target_vector = word_embeddings[word_index.loc[target_word,"index"]].to(self.device)
             
             #compute the similarity between target vector and all the other
             dot_products = torch.matmul(word_embeddings, target_vector.unsqueeze(1)).squeeze(1) # shape 
@@ -446,10 +450,10 @@ class BaseDataset(Dataset):
             similarity_scores = similarity_score_dict[base_target]
             
             # to dtype=torch.float32
-            similarity_scores = similarity_scores.to(torch.float32).cuda()
+            similarity_scores = similarity_scores.to(torch.float32).to(self.device)
 
             # Compute quantiles
-            quantiles = torch.quantile(similarity_scores, torch.linspace(0, 1, 11).cuda())
+            quantiles = torch.quantile(similarity_scores, torch.linspace(0, 1, 11).to(self.device))
 
             # Use vectorized operations to categorize words
             indices = torch.bucketize(similarity_scores, quantiles).cpu()  # This will assign each score to a bucket
@@ -535,7 +539,7 @@ class BaseDataset(Dataset):
         if self.similarity_score_dict is None:
             # Manager for managing a shared dictionary
             similarity_score_dict = {}
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = self.device #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
                 futures = {}
