@@ -62,10 +62,8 @@ class EvaluateMechanism:
         """Checks whether a model predicts the factual or counterfactual
         target, or another result. Returns BATCH indices of the samples that
         were predicted as target_true (F), target_false (CF), or other."""
-        #print("Logit shape",logit.shape) 
         # apply softmax and get probability of the last token at the end of sequence
         probs = torch.softmax(logits, dim=-1)[:, -1, :]
-        #print("Probs shape", probs.shape)
         # count the number of times the model predicts the target[:, 0] or target[:, 1]
         num_samples = target.shape[0]
         target_true = 0
@@ -75,10 +73,8 @@ class EvaluateMechanism:
         target_false_indices = []
         other_indices = []
         for i in range(num_samples):
-            max_prob = torch.argmax(probs[i])  #TODO is this the correct index?
-            #print("Max prob", self.model.tokenizer.decode(max_prob), "Target true", self.model.tokenizer.decode(target[i,0]), "Target false", self.model.tokenizer.decode(target[i,1]))
-            if max_prob == target[i, 0]:  #TODO is this the correct index?
-                # print("DEBUG:", self.tokenizer.decode(target[i, 0]), self.tokenizer.decode(torch.argmax(probs[i])))
+            max_prob = torch.argmax(probs[i])
+            if max_prob == target[i, 0]:
                 target_true += 1
                 target_true_indices.append(i)
             elif max_prob == target[i, 1]:
@@ -90,66 +86,41 @@ class EvaluateMechanism:
         return target_true_indices, target_false_indices, other_indices
 
     def evaluate(self, dataloader):
-
-        target_true, target_false, other = 0, 0, 0
-        n_batch = len(dataloader)
-        all_true_indices = []
-        all_false_indices = []
-        all_other_indices = []
+        true_indices = []
+        false_indices = []
+        other_indices = []
 
         idx = 0
         for batch in tqdm(dataloader, desc="Extracting logits"):
-            #print(len(batch))                
             input_ids = batch["input_ids"].to(self.device)
-            #print("Input ids shape", input_ids.shape)
             output = self.model(input_ids)
-            #print("Output type", type(output))
             logits = output["logits"]
-            # vocab_items = self.tokenizer.batch_decode( batch["target"])
-            # print("Target", vocab_items, batch["target"].shape)
             count = self.check_prediction(logits, batch["target"])
-            #print("The count produced is", count)
-            target_true += len(count[0])
-            target_false += len(count[1])
-            other += len(count[2])
-            #print("Valid sum?", len(count[0]) + len(count[1]) + len(count[2]), input_ids.shape[0])
 
-            all_true_indices.extend(
+            true_indices.extend(
                 [
                     self.dataset.original_index[i + idx * self.batch_size]
                     for i in count[0]
                 ]
             )
-            all_false_indices.extend(
+            false_indices.extend(
                 [
                     self.dataset.original_index[i + idx * self.batch_size]
                     for i in count[1]
                 ]
             )
-            all_other_indices.extend(
+            other_indices.extend(
                 [
                     self.dataset.original_index[i + idx * self.batch_size]
                     for i in count[2]
                 ]
             )
             idx += 1
-        return (
-            target_true,
-            target_false,
-            other,
-            all_true_indices,
-            all_false_indices,
-            all_other_indices,
-        )
+        return true_indices, false_indices, other_indices
+        
 
     def evaluate_all(self):
         """What on earth is this function supposed to do?"""
-        target_true, target_false, other = [], [], []
-        #print("SAMPLES", self.n_samples)
-        
-        #self.dataset.reset(new_similarity_level = self.similarity[1]) # this and the previous line seem messy
-        print("Length of dataset", len(self.dataset.full_data))
-        target_true_tmp, target_false_tmp, other_tmp = 0, 0, 0
         all_true_indices = []
         all_false_indices = []
         all_other_indices = []
@@ -159,14 +130,9 @@ class EvaluateMechanism:
                 continue
             dataloader = DataLoader(self.dataset, batch_size=self.batch_size, shuffle=True)
             result = self.evaluate(dataloader)
-            # target_true_tmp += result[0]
-            # target_false_tmp += result[1]
-            # other_tmp += result[2]
+            assert set(result[0]) & set(result[1]) & set(result[2]) == set(), "Duplicates in the indices"
 
-            # assert duplicates in the indices
-            assert set(result[3]) & set(result[4]) & set(result[5]) == set(), "Duplicates in the indices"
-
-            all_true_indices.extend(result[3])
+            all_true_indices.extend(result[0])
             all_false_indices.extend(result[4])
             all_other_indices.extend(result[5])
 
@@ -186,111 +152,3 @@ class EvaluateMechanism:
 
         self.dataset.as_dataframe().to_csv(f"../results/sim_raw_results_{save_name}.tsv", sep="\t", index=True)
         print("Saved results!")
-        return
-
-
-        # # add the results of the sample to the total
-        # target_true.append(target_true_tmp)
-        # target_false.append(target_false_tmp)
-        # other.append(other_tmp)
-
-        # #print("Target true length", len(target_true))
-        # # average the results over the number of samples
-        # Target_true = target_true
-        # Target_false = target_false
-        # Other = other
-        # print("target true", Target_true)
-        # print("target false", Target_false)
-        # print("other", Other)
-
-        # target_true = torch.mean(torch.tensor(Target_true).float())
-        # target_false = torch.mean(torch.tensor(Target_false).float())
-        # other = torch.mean(torch.tensor(Other).float())
-
-        # target_true_std = torch.std(torch.tensor(Target_true).float())
-        # target_false_std = torch.std(torch.tensor(Target_false).float())
-        # other_std = torch.std(torch.tensor(Other).float())
-
-        # print(
-        #     f"Total: Target True: {target_true}, Target False: {target_false}, Other: {other}"
-        # )
-        # print(
-        #     f"Total: Target True std: {target_true_std}, Target False std: {target_false_std}, Other std: {other_std}"
-        # )
-
-        # index = torch.cat(index, dim=1)
-
-        if len(self.model_name.split("/")) > 1:
-            save_name = self.model_name.split("/")[1]
-        else:
-            save_name = self.model_name
-        if self.similarity[0]:
-            save_name += "similarity"
-        # save results
-
-        filename = FILENAME.format(self.family_name)
-        # if file not exists, create it and write the header
-        if not os.path.isfile(filename):
-            with open(filename, "w") as file:
-                file.write(
-                    "model_name,orthogonalize,premise,interval,similarity_type,target_true,target_false,other,target_true_std,target_false_std,other_std\n"
-                )
-
-        with open(filename, "a+") as file:
-            file.seek(0)
-            # if there is aleardy a line with the same model_name and orthogonalize, delete it
-            lines = file.readlines()
-            # Check if a line with the same model_name and orthogonalize exists
-            line_exists = any(
-                line.split(",")[0] == self.model_name
-                and line.split(",")[1] == str(self.similarity[0])
-                and line.split(",")[2] == self.premise
-                and line.split(",")[3] == self.similarity[1]
-                and line.split(",")[4] == self.similarity[2]
-                for line in lines
-            )
-
-            # If the line exists, remove it
-            if line_exists:
-                lines = [
-                    line
-                    for line in lines
-                    if not (
-                        line.split(",")[0] == self.model_name
-                        and line.split(",")[1]
-                        == str(
-                            self.similarity[0]
-                            and line.split(",")[2] == self.premise
-                            and line.split(",")[3] == self.similarity[1]
-                            and line.split(",")[4] == self.similarity[2]
-                        )
-                    )
-                ]
-
-                # Rewrite the file without the removed line
-                file.seek(0)  # Move the file pointer to the start of the file
-                file.truncate()  # Truncate the file (i.e., remove all content)
-                file.writelines(lines)  # Write the updated lines back to the file
-            file.write(
-                f"{self.model_name},{self.similarity[0]},{self.premise},{self.similarity[1]},{self.similarity[2]} ,{target_true},{target_false},{other},{target_true_std},{target_false_std},{other_std}\n"
-            )
-
-        # save indices
-        if not os.path.isdir(f"../results/{self.family_name}_evaluate_mechs_indices"):
-            # if the directory does not exist, create it
-            os.makedirs(f"../results/{self.family_name}_evaluate_mechs_indices")
-
-        with open(
-            f"../results/{self.family_name}_evaluate_mechs_indices/{save_name}_evaluate_mechanism_indices.json",
-            "w",
-        ) as file:
-            json.dump(
-                {
-                    "target_true": all_true_indices,  # type: ignore
-                    "target_false": all_false_indices,  # type: ignore
-                    "other": all_other_indices,  # type: ignore
-                },
-                file,
-            )
-
-        return target_true, target_false, other
