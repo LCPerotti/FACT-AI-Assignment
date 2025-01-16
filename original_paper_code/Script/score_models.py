@@ -82,19 +82,21 @@ def launch_evaluation(config: LaunchConfig,  model:BaseModel, dataset=None, eval
         dataset = init_dataset(config, model)
         print("Dataset loaded")
     else:
-        dataset.update(
-            premise=config.premise,
-            new_similarity_level=config.interval,
-        )
+        pass
+        # dataset.update(
+        #     premise=config.premise,
+        #     new_similarity_level=config.interval,
+        # )
         print("Dataset updated")
     if evaluator is None:
         evaluator = init_evaluator(config, dataset, model)
     else:
-        evaluator.update(
-            dataset=dataset,
-            premise=config.premise,
-            similarity=(config.similarity, config.interval, config.similarity_type),
-        )
+        pass
+        # evaluator.update(
+        #     dataset=dataset,
+        #     premise=config.premise,
+        #     similarity=(config.similarity, config.interval, config.similarity_type),
+        # )
 
     evaluator.evaluate_all()
     return dataset, evaluator
@@ -120,8 +122,12 @@ def init_dataset(config: LaunchConfig, model: BaseModel):
         save_name = config.model_name.split("/")[1]
     else:
         save_name = config.model_name
+
+    print(save_name)
     if config.experiment == "copyVSfact":
         dataset_path = f"../data/full_data_sampled_{save_name}.json"
+        #dataset_path = f"../data/small_data_{save_name}.json"
+        #dataset_path = f"../data/unsampled_{save_name}.json"
     elif config.experiment == "contextVSfact":
         dataset_path = f"../data/context_dataset_{save_name}.json"
     else:
@@ -134,7 +140,7 @@ def init_dataset(config: LaunchConfig, model: BaseModel):
         experiment=config.experiment,
         similarity=(config.similarity, config.interval, config.similarity_type),
         no_subject=True,
-        end=100
+        #end=200
     )
 
 
@@ -235,6 +241,36 @@ def evaluate_similarity_all_premise(
         dataset = None
         evaluator = None
 
+def evaluate_universal(
+        options: Options, experiment: Literal["copyVSfact", "contextVSfact"]):
+    DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+    dataset = None
+    evaluator = None
+    similarity = False
+
+
+    for model_name in options.models_name:
+        model = ModelFactory.create(model_name, hf_model=True, device=DEVICE)
+        for premise in (options.premise if args.premise else [options.premise[0]]):
+            for interval in (options.interval if args.similarity else [0]):
+                launch_config = LaunchConfig(
+                    model_name=model_name,
+                    hf_model_name=model_name,
+                    similarity=args.similarity,
+                    interval=interval,
+                    similarity_type=SIMILARITY_TYPE,
+                    experiment=experiment,
+                    family_name=FAMILY_NAME,
+                    premise=premise,
+                    num_samples=NUM_SAMPLES,
+                )
+                dataset, evaluator = launch_evaluation(
+                launch_config, model, dataset, evaluator
+                )
+        dataset = None
+        evaluator = None
+
+
 
 def main(args):
     experiments = []
@@ -263,20 +299,21 @@ if __name__ == "__main__":
     parser.add_argument("--similarity-type", type=str)
     parser.add_argument("--num-samples", type=int, default=NUM_SAMPLES)
     parser.add_argument("--experiment", type=str, default="")
+    parser.add_argument("--datapath", type=str, default="")
     parser.add_argument(
         "--models-name",
         nargs="+",
         type=str,
         default=[
-            "gpt2",
-            "gpt2-medium",
+            #"gpt2",
+            #"gpt2-medium",
             "gpt2-large",
-            "gpt2-xl",
+            #"gpt2-xl",
             # "EleutherAI/pythia-160m",
             # "EleutherAI/pythia-410m",
             # "EleutherAI/pythia-1b",
             # "EleutherAI/pythia-1.4b",
-            "EleutherAI/pythia-6.9b",
+            #"EleutherAI/pythia-6.9b",
         ],
     )
 
