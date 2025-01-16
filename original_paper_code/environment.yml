@@ -16,13 +16,14 @@ dependencies:
       - gensim==4.3.2
       - ipdb==0.13.13
       - matplotlib==3.8.1
+      - seaborn
       - more_itertools==10.2.0
       - numpy==1.26.4
 
       # Added jupyter notebook
       - jupyterlab>=4.2.5
       - notebook>=7.2.2
-      
+
       # To utilize depracated 'tri', 'triu' and 'tril'
       - scipy<=1.12.0
       - openai==1.14.2
