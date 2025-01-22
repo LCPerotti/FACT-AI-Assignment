@@ -110,7 +110,8 @@ class Config:
             total_effect=args.total_effect if args.total_effect else False,
             hf_model_name= get_hf_model_name(args.model_name),
             ablate_component=args.ablate_component,
-            flag = args.flag
+            flag = args.flag,
+            normalize_logit = args.normalize_logit
         )
         
     def to_json(self):
@@ -126,7 +127,9 @@ class Config:
             "total_effect": self.total_effect,
             "hf_model_name": self.hf_model_name,
             "ablate_component": self.ablate_component,
-            "flag": self.flag
+            "flag": self.flag,
+            "normalize_logit": self.normalize_logit
+
         }
 
 # Gets the dataset needed for the experiment.
@@ -172,9 +175,7 @@ def logit_attribution(model, dataset, config, args):
     If --no-plots isn't set, also creates a plot using "src_figure/logit_attribution.R"/
     """
 
-    dataset_slice_name = (
-        "full" if config.dataset_slice is None else config.dataset_slice
-    )
+    dataset_slice_name = "full" if config.dataset_end is None else config.dataset_end
     dataset_slice_name = (
         dataset_slice_name if config.up_to_layer == "all" else f"{dataset_slice_name}_layer_{config.up_to_layer}"
     )
@@ -211,7 +212,7 @@ def logit_lens(model, dataset, config, args):
     """
     Runs the logit attribution experiment (mainly defined in experiment/logit_lens.py).
     Also decides the name for where to store the data. Which is:
-    /results/<experimentType><flag>/logit_attribution/<model_name>_<dataset_slice_name>
+    /results/<experimentType><flag>/logit_lens/<model_name>_<dataset_slice_name>
     Note: experimentType will likely always be "copyVSfact" since it is the only accepted one.
     If --no-plots isn't set, also creates a plot using "src_figure/logit_lens.R"/
     """
@@ -468,6 +469,7 @@ if __name__ == "__main__":
     # Changed default to copyVSfact so it doesn't throw an error due to lack of folder arg
     parser.add_argument("--experiment", type=str, default="copyVSfact")
     parser.add_argument("--flag", type=str, default="")
+    parser.add_argument("--normalize-logit", type=str, default='none')
     
     args = parser.parse_args()
     main(args)

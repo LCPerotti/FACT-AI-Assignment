@@ -158,52 +158,103 @@ class LogitAttribution(BaseExperiment):
 
         # Create a storage object to store the logits
         for batch in dataloader:
-            # print cuda memory
-            # if hooks is not None:
-            #     logits, cache = self.model.run_with_hooks(
-            #         batch["prompt"], hooks=hooks, return_cache=True
-            #     )
-            # else:
             logits, cache = self.model.run_with_cache(
                 batch["prompt"], prepend_bos=False
             )
 
             if normalize_logit != "none":
-                raise NotImplementedError
+                apply_ln = True
+
+            # Component size is 14 here, hidden size 768
             stack_of_resid, resid_labels = cache.decompose_resid(
                 apply_ln=apply_ln, return_labels=True, mode="attn", layer=up_to_layer
             )
+
+            # Component size is 159 here, hidden size 768. model is default 'all'
             stack_of_component, labels = cache.get_full_resid_decomposition(
                 expand_neurons=False,
                 apply_ln=apply_ln,
                 return_labels=True,
                 layer=up_to_layer,
             )  # return a tensor of shape (component_size, batch_size, seq_len, hidden_size)
+
+
+            # batch_size x sequence_length
             target_mem, target_cp = self.slice_target(batch["target"], length=length)
 
             labels = labels + resid_labels
-            stack_of_component = torch.cat([stack_of_component, stack_of_resid], dim=0)
 
-            mem_attribute = cache.logit_attrs(stack_of_component, tokens=target_mem)
-            cp_attribute = cache.logit_attrs(stack_of_component, tokens=target_cp)
-            diff_attribute = cache.logit_attrs(
-                stack_of_component, tokens=target_mem, incorrect_tokens=target_cp
-            )  # (component, batch, position)
-            
-            
-            storage.append(
-                mem_attribute.cpu(),
-                cp_attribute.cpu(),
-                diff_attribute.cpu(),
-                labels,
-                batch["obj_pos"].cpu(),
-                batch["1_subj_pos"].cpu(),
-                batch["2_subj_pos"].cpu(),
-                batch["subj_len"].cpu(),
-            )
-            
-        # clear the cuda cache
-        torch.cuda.empty_cache()
+            stack_of_component = torch.cat([stack_of_component, stack_of_resid], dim=0)
+            if normalize_logit == "none":
+
+                mem_attribute = cache.logit_attrs(stack_of_component, tokens=target_mem)
+                cp_attribute = cache.logit_attrs(stack_of_component, tokens=target_cp)
+
+                diff_attribute = cache.logit_attrs(
+                    stack_of_component, tokens=target_mem, incorrect_tokens=target_cp
+                )  # (component, batch, position)
+
+                storage.append(
+                    mem_attribute.cpu(),
+                    cp_attribute.cpu(),
+                    diff_attribute.cpu(),
+                    labels,
+                    batch["obj_pos"].cpu(),
+                    batch["1_subj_pos"].cpu(),
+                    batch["2_subj_pos"].cpu(),
+                    batch["subj_len"].cpu(),
+                )
+
+            # Manually calculate logits to have acces to logits for whole vocab
+            # for softmax normalization
+            elif normalize_logit in ["softmax", "log_softmax"]:
+                # clear the cuda cache
+                torch.cuda.empty_cache()
+
+                # Calculate logits with full unembedding matrix
+                logits = einops.einsum(
+                    self.model.unembed(), stack_of_component,
+                    "d d_v, a b c d -> a b c d_v"
+                )
+
+                # Adjust normalization based on flag
+                if normalize_logit == "softmax":
+                    logits_normalized = torch.softmax(logits, dim=-1)
+                else:
+                    logits_normalized = torch.logsoftmax(logits, dim=-1)
+
+                target = batch["target"]
+
+                batch_size = target.shape[0]
+
+                mem_attribute = torch.zeros(logits_normalized.shape[:-1])
+                cp_attribute = torch.zeros(logits_normalized.shape[:-1])
+
+                # Gather the value of the target token from every normalized logit
+                for i in range(batch_size):
+                    mem_attribute[:, i] = logits_normalized[:, i, :, target[i, 0]]
+
+                    cp_attribute[:, i] = logits_normalized[:, i, :, target[i, 1]]
+
+                diff_attribute = cp_attribute - mem_attribute
+
+                # Store the results
+                storage.append(
+                    mem_attribute.cpu(),
+                    cp_attribute.cpu(),
+                    diff_attribute.cpu(),
+                    labels,
+                    batch["obj_pos"].cpu(),
+                    batch["1_subj_pos"].cpu(),
+                    batch["2_subj_pos"].cpu(),
+                    batch["subj_len"].cpu(),
+                )
+            else:
+                raise ValueError("Logit normalization must be one of 'none', 'softmax', 'log_softmax'")
+
+
+            # clear the cuda cache
+            torch.cuda.empty_cache()
 
     def attribute(self, apply_ln: bool = False, **kwargs) -> Tuple[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], List[str]]:
         """
