@@ -219,22 +219,24 @@ class LogitAttribution(BaseExperiment):
 
                 # Adjust normalization based on flag
                 if normalize_logit == "softmax":
-                    logits_normalized = torch.softmax(logits, dim=-1)
+                    logits = torch.softmax(logits, dim=-1)
                 else:
-                    logits_normalized = torch.logsoftmax(logits, dim=-1)
+                    logits = torch.logsoftmax(logits, dim=-1)
 
                 target = batch["target"]
 
                 batch_size = target.shape[0]
 
-                mem_attribute = torch.zeros(logits_normalized.shape[:-1])
-                cp_attribute = torch.zeros(logits_normalized.shape[:-1])
+                mem_attribute = torch.zeros(logits.shape[:-1])
+                cp_attribute = torch.zeros(logits.shape[:-1])
 
                 # Gather the value of the target token from every normalized logit
                 for i in range(batch_size):
-                    mem_attribute[:, i] = logits_normalized[:, i, :, target[i, 0]]
+                    mem_attribute[:, i] = logits[:, i, :, target[i, 0]]
 
-                    cp_attribute[:, i] = logits_normalized[:, i, :, target[i, 1]]
+                    cp_attribute[:, i] = logits[:, i, :, target[i, 1]]
+
+                del logits
 
                 diff_attribute = cp_attribute - mem_attribute
 
