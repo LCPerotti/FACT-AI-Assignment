@@ -68,7 +68,7 @@ class PerplexityExperiment:
 
 tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 model = AutoModelForCausalLM.from_pretrained("gpt2")
-test = load_dataset("/Users/Ori/Downloads/", data_files="test-00000-of-00001.parquet")['train']
+test = load_dataset("../../data", data_files="wikitext-test.parquet")['train']
 encodings = tokenizer("\n\n".join(test["text"][7:19]), return_tensors="pt")
 
 ppl = PerplexityExperiment(model, encodings, device="cpu").calculate_perplexity()
