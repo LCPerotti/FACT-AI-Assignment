@@ -48,10 +48,12 @@ class Ablator(BaseExperiment):
         batch_size: int,
         experiment: Literal["copyVSfact"],
         total_effect: bool = True,
+        eval: bool = False,
     ):
         super().__init__(dataset, model, batch_size, experiment)
         self.total_effect = total_effect
         self.hooks = []
+        self.eval = eval
 
     def set_heads(self, heads:List[Tuple[int,int]], position: Literal["all", "attribute"] = "attribute", value: float = 0.0):
         """
@@ -72,9 +74,14 @@ class Ablator(BaseExperiment):
                 return attention_pattern
             else:
                 raise ValueError("position must be 'all' or 'attribute'")
+
+        if self.eval:
+            def eval_fn(attention_pattern:torch.Tensor,hook, value:float, position: Literal["all"], head:int):
+                attention_pattern[:,head, -1, :] = value * attention_pattern[:,head, -1, :]
+                return attention_pattern
             
         for layer, head in heads:
-            self.hooks.append((f"blocks.{layer}.attn.hook_attn_scores", partial(hook_fn, value=value, position=position, head=head)))
+            self.hooks.append((f"blocks.{layer}.attn.hook_attn_scores", partial(hook_fn if not self.eval else eval_fn, value=value, position=position, head=head)))
             
                 
     def reset_hooks(self):
@@ -87,15 +94,21 @@ class Ablator(BaseExperiment):
         self.model.reset_hooks()
         # with torch.no_grad():
             #re-write hooks: if the hook are batch dependent, we should pass the batch to the hook, otherwise we can just pass the hook
-        def hook_fn(hook, batch):
+        def hook_fn(hook, batch, eval=False):
             #if batch is a argument of the hook, we pass it
-            if "batch" in list(inspect.signature(hook).parameters.keys()):
+            if not eval and "batch" in list(inspect.signature(hook).parameters.keys()):
                 return partial(hook, batch=batch)
             else:
                 return hook
         actual_hooks = []
         for hook_name, hook in self.hooks:
-            actual_hooks.append((hook_name, hook_fn(hook, batch)))
+            actual_hooks.append((hook_name, hook_fn(hook, batch, eval=self.eval)))
+
+        if self.eval:
+            with self.model.model.hooks(fwd_hooks=actual_hooks):
+                hooked_loss = self.model(batch, return_type="loss")
+            
+            return hooked_loss
         
         logit = self.model.run_with_hooks(
             batch["prompt"], prepend_bos=False, fwd_hooks=actual_hooks
