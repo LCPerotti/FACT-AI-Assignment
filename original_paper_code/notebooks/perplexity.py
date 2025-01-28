@@ -36,7 +36,7 @@ class PerplexityExperiment:
         for begin_loc in tqdm(range(0, seq_len, stride)):
             end_loc = min(begin_loc + max_length, seq_len)
             trg_len = end_loc - prev_end_loc  # may be different from stride on last loop
-            input_ids = self.encodings.input_ids[:, begin_loc:end_loc].to(device)
+            input_ids = self.encodings.input_ids[:, begin_loc:end_loc].to(self.device)
             target_ids = input_ids.clone()
             target_ids[:, :-trg_len] = -100
 
@@ -84,14 +84,20 @@ def run(model="gpt2"):
     boosting_value = 5
     suppression_value = 0
 
-    for head_list in experiments:
-        hooked_model = ModelFactory.create(model)
-        ablator = Ablator(model=hooked_model, dataset=[], batch_size=20, experiment="copyVSfact", eval=True)
-        if len(head_list[0]) != 0:
-            ablator.set_heads(heads=head_list[0], value=boosting_value, position="all")
-        if len(head_list[1]) != 0:
-            ablator.set_heads(heads=head_list[1], value=suppression_value, position="all")
-        ppl = PerplexityExperiment(ablator, base, encodings, device=device, hooked=True).calculate_perplexity()
+    for head_list in experiments.values():
+        if len(head_list[0]) == 0 and len(head_list[1]) == 0:
+            ppl = PerplexityExperiment(base, base, encodings, device=device, hooked=False).calculate_perplexity()
+
+        else:
+            hooked_model = ModelFactory.create(model)
+            ablator = Ablator(model=hooked_model, dataset=[], batch_size=20, experiment="copyVSfact", eval=True)
+            if len(head_list[0]) != 0:
+                ablator.set_heads(heads=head_list[0], value=boosting_value, position="all")
+            if len(head_list[1]) != 0:
+                ablator.set_heads(heads=head_list[1], value=suppression_value, position="all")
+            
+            ppl = PerplexityExperiment(ablator, base, encodings, device=device, hooked=True).calculate_perplexity()
+        
         results_buffer.append(ppl.item())
     
     experiments_str = {k: [str(v[0]), str(v[1])] for k, v in experiments.items()}
