@@ -61,7 +61,8 @@ class Ablator(BaseExperiment):
         position: "all" or "attribute" to ablate all the entries or only the attribute entries
         value: value to multiply the ablated entries (default 0.0) pattern <- value * pattern
         """
-        self.reset_hooks()
+        if not self.eval:
+            self.reset_hooks()
         def hook_fn(attention_pattern:torch.Tensor,hook, value:float, position: Literal["all", "attribute"], batch, head:int):
             if position == "all":
                 attention_pattern[:,head, -1, :] = value * attention_pattern[:,head, -1, :]

@@ -1,8 +1,10 @@
-from transformers import AutoModelForCausalLM, GPT2TokenizerFast
-from accelerate.test_utils.testing import get_backend
+# Adapted from HuggingFace's example code for calculating perplexity
+# https://huggingface.co/docs/transformers/en/perplexity
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from tqdm import tqdm
 from datasets import load_dataset
+import pandas as pd
 
 import sys
 import os
@@ -12,13 +14,8 @@ sys.path.append('../data')
 from Src.model import ModelFactory
 from Src.experiment import Ablator
 
-device = "cpu" # automatically detects the underlying device type (CUDA, CPU, XPU, MPS, etc.)
-model_id = "gpt2"
-model = AutoModelForCausalLM.from_pretrained(model_id).to(device)
-tokenizer = GPT2TokenizerFast.from_pretrained(model_id)
-
 class PerplexityExperiment:
-    def __init__(self, lm_interface, base, encodings, batch_size=16, device="cuda", hooked=False):
+    def __init__(self, lm_interface, base, encodings, batch_size=32, device="cuda", hooked=False):
         self.lm_interface = lm_interface
         self.base = base
         if not hooked:
@@ -69,18 +66,43 @@ class PerplexityExperiment:
         ppl = torch.exp(avg_nll)
         
         return ppl
+    
+def run(model="gpt2"):
+    tokenizer = AutoTokenizer.from_pretrained(model)
+    base = AutoModelForCausalLM.from_pretrained(model)
+    test = load_dataset("../data", data_files="wikitext-test.parquet")['train']
+    encodings = tokenizer("\n\n".join(test["text"]), return_tensors="pt")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    experiments = {"no_modification": [[], []],
+                   #(layer, head)
+                   "best_suppression": [[], [(7,10), (9,9), (9,6), (10,0)]], 
+                   "best_boost": [[(10,7), (11,10)], []],
+                   "best_combined": [[(10,7), (11,10)], [(7,10), (9,9), (9,6), (10,0)]],
+                }
+    results_buffer = []
+    boosting_value = 5
+    suppression_value = 0
 
-tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-base = AutoModelForCausalLM.from_pretrained("gpt2")
-hooked_model = ModelFactory.create("gpt2")
-ablator = Ablator(model=hooked_model, dataset=[], batch_size=20, experiment="copyVSfact", eval=True)
-ablator.set_heads(heads=[(10,7), (11,10), (11,1), (11,3)], value=0, position="all")
-test = load_dataset("../data", data_files="wikitext-test.parquet")['train']
-encodings = tokenizer("\n\n".join(test["text"][:20]), return_tensors="pt")
+    for head_list in experiments:
+        hooked_model = ModelFactory.create(model)
+        ablator = Ablator(model=hooked_model, dataset=[], batch_size=20, experiment="copyVSfact", eval=True)
+        if len(head_list[0]) != 0:
+            ablator.set_heads(heads=head_list[0], value=boosting_value, position="all")
+        if len(head_list[1]) != 0:
+            ablator.set_heads(heads=head_list[1], value=suppression_value, position="all")
+        ppl = PerplexityExperiment(ablator, base, encodings, device=device, hooked=True).calculate_perplexity()
+        results_buffer.append(ppl.item())
+    
+    experiments_str = {k: [str(v[0]), str(v[1])] for k, v in experiments.items()}
+    df = pd.DataFrame.from_dict(experiments_str, orient='index')
 
-ppl = PerplexityExperiment(ablator, base, encodings, device="cpu", hooked=True).calculate_perplexity()
-print(f"Perplexity: {ppl.item()}")
-ppl2 = PerplexityExperiment(base, base, encodings, device="cpu", hooked=False).calculate_perplexity()
-print(f"Perplexity base: {ppl2.item()}")
-print("diff", ppl2.item() - ppl.item())
+    df.columns = ['boosted_heads', 'suppressed_heads']
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'experiment'}, inplace=True)
+    df['perplexity'] = results_buffer
+
+    return df
+
+df = run()
+df.to_csv("../results/modification_perplexity.csv", index=False)
