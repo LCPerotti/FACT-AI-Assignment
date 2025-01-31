@@ -55,13 +55,13 @@ class Ablator(BaseExperiment):
         self.hooks = []
         self.eval = eval
 
-    def set_heads(self, heads:List[Tuple[int,int]], position: Literal["all", "attribute"] = "attribute", value: float = 0.0):
+    def set_heads(self, heads:List[Tuple[int,int]], position: Literal["all", "attribute"] = "attribute", value: float = 0.0, reset: bool = True):
         """
         heads: list of tuples (layer, head) to ablate
         position: "all" or "attribute" to ablate all the entries or only the attribute entries
         value: value to multiply the ablated entries (default 0.0) pattern <- value * pattern
         """
-        if not self.eval:
+        if not self.eval and reset:
             self.reset_hooks()
         def hook_fn(attention_pattern:torch.Tensor,hook, value:float, position: Literal["all", "attribute"], batch, head:int):
             if position == "all":
