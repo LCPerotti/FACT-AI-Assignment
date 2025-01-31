@@ -58,9 +58,9 @@ class PerplexityExperiment:
 
         avg_nll = nll_sum / n_tokens  # average negative log-likelihood per token
         ppl = torch.exp(avg_nll)
-        
+
         return ppl
-    
+
 def run(model="gpt2"):
     tokenizer = AutoTokenizer.from_pretrained(model)
     base = AutoModelForCausalLM.from_pretrained(model)
@@ -70,7 +70,7 @@ def run(model="gpt2"):
 
     experiments = {"no_modification": [[], []],
                    #(layer, head)
-                   "best_suppression": [[], [(7,10), (9,9), (9,6), (10,0)]], 
+                   "best_suppression": [[], [(7,10), (9,9), (9,6), (10,0)]],
                    "best_boost": [[(10,7), (11,10)], []],
                    "best_combined": [[(10,7), (11,10)], [(7,10), (9,9), (9,6), (10,0)]],
                 }
@@ -85,11 +85,11 @@ def run(model="gpt2"):
             ablator.set_heads(heads=head_list[0], value=boosting_value, position="all")
         if len(head_list[1]) != 0:
             ablator.set_heads(heads=head_list[1], value=suppression_value, position="all")
-        
+
         ppl = PerplexityExperiment(ablator, base, encodings, device=device).calculate_perplexity()
         print(experiment, ppl.item())
         results_buffer.append(ppl.item())
-    
+
     experiments_str = {k: [str(v[0]), str(v[1])] for k, v in experiments.items()}
     df = pd.DataFrame.from_dict(experiments_str, orient='index')
 
@@ -99,6 +99,3 @@ def run(model="gpt2"):
     df['perplexity'] = results_buffer
 
     return df
-
-df = run()
-df.to_csv("../results/modification_perplexity.csv", index=False)
