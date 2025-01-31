@@ -1,0 +1,5 @@
+experiment,boosted_heads,suppressed_heads,perplexity
+no_modification,[],[],29.845874786376953
+best_suppression,[],"[(7, 10), (9, 9), (9, 6), (10, 0)]",29.845874786376953
+best_boost,"[(10, 7), (11, 10)]",[],29.845874786376953
+best_combined,"[(10, 7), (11, 10)]","[(7, 10), (9, 9), (9, 6), (10, 0)]",29.845874786376953
