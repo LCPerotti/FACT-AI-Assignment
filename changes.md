@@ -12,10 +12,11 @@ Created since the `requirements.txt` do not include all needed modules, and the 
 - Removed exact version for transformerlens and transformers to allow more recent versions and automated version resolution by pip
 
 ## Script/run_all.py
-Threw an error when attempted to run due to missing values.
+Threw an error when attempted to run due to missing values and undeclared variables.
 
 - Removed references to missing `Src.config` module, set `hf_access_token` and `hf_model_cache_dir` to empty.
 These appear to be only used for the Llama 2 model, which we did not use.
+- Set `config.data_slice` to `None`, since otherwise the value is not set. This value is only used for determining file names.
 
 ## Src/dataset.py
 Threw an error when attempted to run due to missing import.
@@ -23,7 +24,6 @@ Threw an error when attempted to run due to missing import.
 - Removed `line_reader` module import, since it is unneeded for running the experiments and not included in the `requirements.txt`
 
 ## Src/experiment/logit_attribution.py
-Threw an error when attempted to run due to undeclared variables
-- Set `config.data_slice` to `None`, since otherwise the value is not set.
-- Uncommented an existing line setting `apply_ln` to `False`, since otherwise the value is not set.
+Threw an error when attempted to run due to undeclared variables.
 
+- Uncommented an existing line adding `apply_ln` with default value `False` as an argument for `run`, since otherwise the value is not passed.
